@@ -7,7 +7,7 @@ from telegram.ext import Updater
 
 from auth import Auth
 from loader import Loader
-from modules import Importer
+from importer import Importer
 
 
 ######################################################################

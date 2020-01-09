@@ -3,13 +3,6 @@ from os.path import isfile, join
 import importlib
 
 
-def lsF(d):
-    return [f for f in listdir(d) if isfile(join(d, f)) ]
-
-def to_cid(fil, package):
-    return fil + ' - ' + package
-
-
 class Importer:
     _setup = False
     _imported = {}
@@ -50,3 +43,10 @@ class Importer:
     def get_imported(cls):
         assert cls._setup
         return cls._imported
+
+
+def lsF(d):
+    return [f for f in listdir(d) if isfile(join(d, f)) ]
+
+def to_cid(fil, package):
+    return fil + ' - ' + package
