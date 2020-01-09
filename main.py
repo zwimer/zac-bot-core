@@ -17,6 +17,7 @@ from importer import Importer
 ######################################################################
 
 
+core_module_path = './core-modules/'
 module_path = './modules/'
 
 
@@ -91,7 +92,7 @@ def main(_):
     Loader.install_builtin('help', help_fn)
 
     # Create install list
-    Importer.setup(module_path)
+    Importer.setup(core_module_path, module_path)
     Importer.import_all()
     install_list = Importer.get_imported()
 
