@@ -1,3 +1,14 @@
+# Private
+**/token.priv
+**/auth.json
+
+# Modules
+**/modules/
+
+# Build / code files
+*.swp
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
