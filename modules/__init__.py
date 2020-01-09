@@ -17,7 +17,7 @@ class Importer:
 
     @classmethod
     def setup(cls, m_path):
-        cls._m_name = m_path.split('/')[1]
+        cls._m_name = '.'.join(m_path.split('/')[1:-1])
         cls._m_path = m_path
         cls._setup = True
 
