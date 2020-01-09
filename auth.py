@@ -11,6 +11,11 @@ class Auth:
     def refresh(cls):
         _ = cls._read_auth(refresh = True)
 
+    @classmethod
+    def is_privileged(cls, name):
+        data = cls._read_auth()
+        return name in data['uid']
+
     # Check if uname is authd for group
     @classmethod
     def has_access(cls, uname, group):
@@ -48,7 +53,7 @@ class Auth:
     @classmethod
     def groups_containing(cls, name):
         data = cls._read_auth()
-        assert name in data['uid'], 'User does not exist'
+        assert cls.is_privileged(name), 'No such user'
         uid = data['uid'][name]
         groups = []
         for i in data['groups'].items():
@@ -59,7 +64,7 @@ class Auth:
     @classmethod
     def members(cls, group):
         data = cls._read_auth()
-        assert group in data['groups'], 'Group does not exist'
+        assert group in data['groups'], 'No such group'
         allowed = data['groups'][group]['uid']
         names = set()
         for i in allowed:
@@ -73,7 +78,7 @@ class Auth:
     @classmethod
     def add_user(cls, name):
         data = cls._read_auth()
-        assert name not in data['uid'], 'User already exists'
+        assert not cls.is_privileged(name), 'User already exists'
         uid = 1 + max(data['uid'].values())
         data['uid'][name] = uid
         cls._write_auth()
@@ -81,7 +86,7 @@ class Auth:
     @classmethod
     def delete_user(cls, name):
         data = cls._read_auth()
-        assert name in data['uid'], 'User does not exist'
+        assert cls.is_privileged(name), 'No such user'
         uid = data['uid'].pop(name)
         for i in data['groups'].values():
             allowed = i['uid']
@@ -92,7 +97,7 @@ class Auth:
     @classmethod
     def add_to_group(cls, name, group):
         data = cls._read_auth()
-        assert name in data['uid'], 'No such user'
+        assert cls.is_privileged(name), 'No such user'
         assert group in data['groups'], 'No such group'
         uid = data['uid'][name]
         allowed = data['groups'][group]['uid']
@@ -103,7 +108,7 @@ class Auth:
     @classmethod
     def remove_from_group(cls, name, group):
         data = cls._read_auth()
-        assert name in data['uid'], 'No such user'
+        assert cls.is_privileged(name), 'No such user'
         assert group in data['groups'], 'No such group'
         uid = data['uid'][name]
         allowed = data['groups'][group]['uid']

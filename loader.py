@@ -1,4 +1,9 @@
-from telegram.ext import CommandHandler
+from telegram.ext import (
+    MessageHandler,
+    CommandHandler,
+    DispatcherHandlerStop,
+    Filters
+)
 from auth import Auth
 
 
@@ -16,6 +21,15 @@ class Loader:
         cls._m_path = module_path
         cls._setup = True
         cls._dp = dp
+
+    @classmethod
+    def install_fallback(cls, fallback):
+        assert cls._setup
+        name = 'builtin_unknown_fallback_message_handler'
+        assert name not in cls._builtins
+        cls._builtins.add(name)
+        handler = MessageHandler(Filters.command, fallback)
+        cls._install_handler(handler, name, cls._groups.fallback)
 
     # Used to install builtin commands
     @classmethod
@@ -47,11 +61,6 @@ class Loader:
         handler = cls._handlers.pop(hid)
         cls._dp.remove_handler(handler, group)
 
-    # Get everything loaded
-    @classmethod
-    def get_everything_loaded(cls):
-        return cls._modules | cls._builtins
-
     # Get loaded modules
     @classmethod
     def get_loaded_modules(cls):
@@ -63,16 +72,23 @@ class Loader:
     class _groups:
         builtin = 0
         modules = 1
+        fallback = 999
 
     @staticmethod
     def _to_handler_id(name, group):
         return name + ' - ' + str(group)
 
-    # Install the command
     @classmethod
     def _install(cls, name, fn, group, **kwargs):
         assert cls._setup
-        handler = CommandHandler(name, fn, **kwargs)
+        def terminal_fn(*args, **kwargs):
+            fn(*args, **kwargs)
+            raise DispatcherHandlerStop()
+        handler = CommandHandler(name, terminal_fn, **kwargs)
+        cls._install_handler(handler, name, group)
+
+    @classmethod
+    def _install_handler(cls, handler, name, group):
         hid = cls._to_handler_id(name, group)
         cls._handlers[hid] = handler
         cls._dp.add_handler(handler, group)

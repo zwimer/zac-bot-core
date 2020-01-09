@@ -49,7 +49,11 @@ def error(_, context):
 
 # Start / help
 def start(update, context):
+    # Ignore unprivileged people
     uname = update._effective_chat.username
+    if not Auth.is_privileged(uname):
+        return
+    # Get descriptions of commands
     groups = Loader.get_loaded_modules()
     msgs = [  ]
     def to_instr(cmd, data):
@@ -57,16 +61,22 @@ def start(update, context):
     for i in groups:
         if Auth.has_access(uname, i):
             msgs.append(to_instr(i, Auth.description(i)))
-    if len(msgs) == 0:
-        return
     msgs.append(to_instr('help', 'This dialog'))
-    msg = 'Authorized user detected. You have access to the following commands:'
+    # Reply
+    msg = 'Authorized user detected.'
+    msg += 'You have access to the following commands:'
     delim = '\n    '
     msg += delim + delim.join(msgs)
     update.message.reply_text(msg)
 
 def help_fn(update, context):
     start(update, context)
+
+def unknown(update, _):
+    uname = update._effective_chat.username
+    if Auth.is_privileged(uname):
+        msg = 'Unknown command. See /help for available commands.'
+        update.message.reply_text(msg)
 
 
 ######################################################################
@@ -90,6 +100,7 @@ def main(_):
     # Install start and help
     Loader.install_builtin('start', start)
     Loader.install_builtin('help', help_fn)
+    Loader.install_fallback(unknown)
 
     # Create install list
     Importer.setup(core_module_path, module_path)
