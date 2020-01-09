@@ -6,6 +6,7 @@ import logging
 from telegram.ext import Updater
 
 from auth import Auth
+from admin import Admin
 from loader import Loader
 from importer import Importer
 
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Error handler
 def error(_, context):
     logger.warning('Update caused error "%s"', context.error)
-    raise # TODO
+    raise
 
 
 ######################################################################
@@ -49,10 +50,12 @@ def error(_, context):
 
 # Start / help
 def start(update, context):
+
     # Ignore unprivileged people
     uname = update._effective_chat.username
     if not Auth.is_privileged(uname):
         return
+
     # Get descriptions of commands
     groups = Loader.get_loaded_modules()
     msgs = [  ]
@@ -62,6 +65,7 @@ def start(update, context):
         if Auth.has_access(uname, i):
             msgs.append(to_instr(i, Auth.description(i)))
     msgs.append(to_instr('help', 'This dialog'))
+
     # Reply
     msg = 'Authorized user detected.'
     msg += 'You have access to the following commands:'
@@ -92,6 +96,7 @@ def main(_):
     updater = None
     with open('token.priv') as f:
         updater = Updater(f.read().strip(), use_context=True)
+    Admin.setup(updater)
 
     # Create handler registration
     dp = updater.dispatcher
@@ -108,13 +113,13 @@ def main(_):
     install_list = Importer.get_imported()
 
     # Verify install list
-    g1 = install_list.keys()
-    g2 = Auth.groups()
-    err_msg = "modules.install_list does not match auth.json"
-    assert sorted(g1) == sorted(g2), err_msg
+    must_be_empty = [ i for i in Auth.groups() if i not in install_list.keys() ]
+    err_msg = "modules.install_list does not contain the elements of auth.json"
+    assert len(must_be_empty) == 0, err_msg
 
     # Install modules
-    for name, fn in install_list.items():
+    for name in Auth.groups():
+        fn = install_list[name]
         Loader.install_module(name, fn)
 
     # Log all errors

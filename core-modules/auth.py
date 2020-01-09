@@ -3,7 +3,7 @@ from auth import Auth
 
 def invoke(_, update, context):
     uname = update._effective_chat.username
-    print('@' + uname + ' invoked /auth' + ' '.join(context.args))
+    print('@' + uname + ' invoked /auth ' + ' '.join(context.args))
     usage = 'Usage: /auth <command> <args>'
     try:
         fn = cmds[context.args[0]]
@@ -31,7 +31,7 @@ def view_auth(update, context, _):
 def auth_template(select):
     auth_options = {
         'info' : { 'user' : info_user, 'group' : info_group },
-        'add' : { 'user' : add_user, 'to_group' : add_to_group },
+        'add' : { 'user' : add_user, 'group' : add_group, 'to_group' : add_to_group },
         'remove' : { 'user' : remove_user, 'from_group' : remove_from_group }
     }
     def templated(update, _, args):
@@ -40,7 +40,7 @@ def auth_template(select):
             cmd = args[0]
             options[cmd](update, args[1:])
         except (KeyError, IndexError):
-            msg = 'Usage: /admin auth ' + select + ' <cmd> <arguments>'
+            msg = 'Usage: /auth ' + select + ' <cmd> <arguments>'
             msg += '\nCommands:' + delim + delim.join(options.keys())
             reply(update, msg)
     return templated
@@ -57,7 +57,7 @@ def try_auth(update, f, args, usage, notify_success = True):
         reply(update, usage)
 
 def info_user(update, args):
-    usage = 'Usage: /admin auth info user <username>'
+    usage = 'Usage: /auth info user <username>'
     groups = try_auth(update, Auth.groups_containing, args, usage, False)
     if groups is not None:
         msg = args[0] + ' is in the following groups:'
@@ -65,7 +65,7 @@ def info_user(update, args):
         reply(update, msg)
 
 def info_group(update, args):
-    usage = 'Usage: /admin auth info group <group>'
+    usage = 'Usage: /auth info group <group>'
     users = try_auth(update, Auth.members, args, usage, False)
     if users is not None:
         msg = args[0] + ' contains the following users:'
@@ -73,19 +73,29 @@ def info_group(update, args):
         reply(update, msg)
 
 def add_user(update, args):
-    usage = 'Usage: /admin auth add user <username>'
+    usage = 'Usage: /auth add user <username>'
     try_auth(update, Auth.add_user, args, usage)
 
+def add_group(update, args):
+    usage = 'Usage: /auth add group <group> [info] [info...]'
+    try:
+        assert len(args) > 1
+        group = args[0]
+        description = ' '.join(args[1:])
+        try_auth(update, Auth.add_group, [group, description], usage)
+    except AssertionError:
+        reply(update, usage)
+
 def add_to_group(update, args):
-    usage = 'Usage: /admin auth add to_group <username> <group>'
+    usage = 'Usage: /auth add to_group <username> <group>'
     try_auth(update, Auth.add_to_group, args, usage)
 
 def remove_user(update, args):
-    usage = 'Usage: /admin auth remove user <username>'
+    usage = 'Usage: /auth remove user <username>'
     try_auth(update, Auth.delete_user, args, usage)
 
 def remove_from_group(update, args):
-    usage = 'Usage: /admin auth remove from_group <username> <group>'
+    usage = 'Usage: /auth remove from_group <username> <group>'
     try_auth(update, Auth.remove_from_group, args, usage)
 
 

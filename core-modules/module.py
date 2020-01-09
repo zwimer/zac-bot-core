@@ -5,7 +5,7 @@ from importer import Importer
 
 def invoke(_, update, context):
     uname = update._effective_chat.username
-    print('@' + uname + ' invoked /module' + ' '.join(context.args))
+    print('@' + uname + ' invoked /module ' + ' '.join(context.args))
     usage = 'Usage: /module <command> <args>'
     try:
         fn = cmds[context.args[0]]
@@ -24,15 +24,19 @@ def load_module(update, _, args, *, cmd='load'):
     importable = Auth.groups()
     try:
         mod = args[0]
-        assert mod not in Loader.get_loaded_modules()
-        assert mod not in Importer.get_imported()
-        assert mod in importable
-        Importer.import_module(mod)
+        assert mod not in Loader.get_loaded_modules(), '1'
+        assert mod in importable, '3'
+        if mod in Importer.get_imported():
+            reply(update, 'Module already imported. Loading.')
+        else:
+            Importer.import_module(mod)
         imported = Importer.get_imported()
         Loader.install_module(mod, imported[mod])
         reply(update, mod + ' successfully loaded')
-    except (AssertionError, IndexError):
-        msg = 'Usage: /admin auth ' + cmd + ' <module>'
+        return True
+    except (AssertionError, IndexError) as e:
+        print(e)
+        msg = 'Usage: /module ' + cmd + ' <module>'
         imported = Importer.get_imported().keys()
         unimported = [ i for i in importable if i not in imported ]
         if len(unimported) == 0:
@@ -40,6 +44,7 @@ def load_module(update, _, args, *, cmd='load'):
         else:
             msg += '\nUnimported modules:' + delim + delim.join(unimported)
         reply(update, msg)
+        return False
 
 def reload_module(update, _, args):
     if unload_module(update, _, args, cmd='reload'):
@@ -55,7 +60,7 @@ def unload_module(update, _, args, *, cmd='unload'):
         reply(update, mod + ' successfully unloaded')
         return True
     except (AssertionError, IndexError):
-        msg = 'Usage: /admin auth ' + cmd + ' <module>'
+        msg = 'Usage: /module ' + cmd + ' <module>'
         imported = Importer.get_imported().keys()
         msg += '\nImported modules:' + delim + delim.join(imported)
         reply(update, msg)
@@ -65,10 +70,15 @@ def reset_modules(update, _, _2):
     loaded = [ i for i in Loader.get_loaded_modules() ]
     for i in loaded:
         unload_module(update, _, [i])
+    dangline_imports = [ i for i in Importer.get_imported() ]
+    for i in dangline_imports:
+        Importer.unimport_module(i)
     failed = []
     for i in Auth.groups():
         try:
-            load_module(update, _, [i])
+            if load_module(update, _, [i]) is False:
+                reply(update, 'Failed to load module "' + i + '" for unknown reason')
+                failed.append(i)
         except Exception as err:
             reply(update, 'Failed to load module "' + i + '" with exception: {0}'.format(err))
             failed.append(i)

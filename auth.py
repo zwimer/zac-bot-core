@@ -84,6 +84,17 @@ class Auth:
         cls._write_auth()
 
     @classmethod
+    def add_group(cls, group, description):
+        data = cls._read_auth()
+        assert group not in data['groups'], 'Group already exists'
+        data['groups'][group] = {
+            'args': {},
+            'info': description,
+            'uid': []
+        }
+        cls._write_auth()
+
+    @classmethod
     def delete_user(cls, name):
         data = cls._read_auth()
         assert cls.is_privileged(name), 'No such user'
