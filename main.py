@@ -20,6 +20,7 @@ from importer import Importer
 
 core_module_path = './core-modules/'
 module_path = './modules/'
+container_hostname = 'zac-bot'
 
 
 ######################################################################
@@ -91,6 +92,13 @@ def unknown(update, _):
 
 
 def main(_):
+
+    # For security
+    with open('/proc/sys/kernel/hostname') as f:
+        hostname = f.read().strip()
+    if hostname != container_hostname:
+        print('Error: Not executing from container!')
+        sys.exit(1)
 
     # Create the updater
     updater = None
