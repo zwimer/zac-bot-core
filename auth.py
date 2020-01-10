@@ -99,10 +99,11 @@ class Auth:
         data = cls._read_auth()
         assert cls.is_privileged(name), 'No such user'
         uid = data['uid'].pop(name)
-        for i in data['groups'].values():
-            allowed = i['uid']
-            if uid in allowed:
-                allowed.remove(uid)
+        if uid not in data['uid'].values():
+            for i in data['groups'].values():
+                allowed = i['uid']
+                if uid in allowed:
+                    allowed.remove(uid)
         cls._write_auth()
 
     @classmethod
