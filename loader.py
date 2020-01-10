@@ -15,6 +15,7 @@ from utils import reply
 class Loader:
     _py_mods = {}
     _installed = {}
+    _pre_protection_fns = {}
     _fallback_g = 9999
     _g = 1000
 
@@ -60,6 +61,10 @@ class Loader:
     def loaded(cls):
         return cls._installed.keys()
 
+    @classmethod
+    def pre_protection_fn(cls, module):
+        return cls._pre_protection_fns[module]
+
     #################### Private ####################
 
     @classmethod
@@ -84,23 +89,26 @@ class Loader:
         return mod
 
     @classmethod
-    def _install_handler(cls, module, handler):
+    def _install_handler(cls, module, install_me):
         # Secure the function and ensure dispatch termination when complete
-        safe = Permissions.secure_module(module, handler)
-        def terminal_fn(update, context):
+        def packaged_fn(update, context):
             try:
                 extra_args = cls._pass[module] if module in cls._pass else None
-                safe(update, context, extra_args)
+                install_me(update, context, extra_args)
+            except DispatcherHandlerStop:
+                raise
             except Exception as err:
                 msg = 'Error invoking ' + module + '.invoke: '
                 msg += traceback.format_exc()
                 logging.error(msg)
                 reply(update, 'Internal error.')
             raise DispatcherHandlerStop()
+        cls._pre_protection_fns[module] = packaged_fn
+        safe = Permissions.secure_module(module, packaged_fn)
         # Install the handler
-        handler = CommandHandler(module, terminal_fn)
-        cls._dp.add_handler(handler, cls._g)
-        cls._installed[module] = handler
+        c_handler = CommandHandler(module, safe)
+        cls._dp.add_handler(c_handler, cls._g)
+        cls._installed[module] = c_handler
 
     @classmethod
     def _install_fallback(cls, fallback):
