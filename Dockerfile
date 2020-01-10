@@ -7,10 +7,3 @@ RUN pip3 install python-telegram-bot --upgrade
 
 # Modules
 RUN pip3 install requests
-
-# zac-bot
-RUN mkdir /home/zac-bot
-WORKDIR /home/zac-bot
-COPY . .
-
-CMD ./main.py

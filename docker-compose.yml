@@ -5,4 +5,6 @@ services:
         image: zac-bot:latest
         container_name: zac-bot
         hostname: zac-bot
-        command: ./main.py
+        command: ash -c 'cd /zac-bot/ && ./main.py'
+        volumes:
+            - ./:/zac-bot/

@@ -96,10 +96,10 @@ def remove_from_group(update, args):
 
 cmds = {
     'reload' : refresh_auth,
-    'view' : view_auth,
-    'info' : auth_template('info'),
-    'add' : auth_template('add'),
-    'remove' : auth_template('remove')
+    'view' : view_auth
 }
-
+    # 'info' : auth_template('info'),
+    # 'add' : auth_template('add'),
+    # 'remove' : auth_template('remove')
+# }
 delim = '\n    '
