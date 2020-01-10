@@ -19,6 +19,7 @@ def invoke(update, context, _):
 
     # Get descriptions of the loaded modules that the user may invoke
     mods = set(Loader.loaded()) & set(Permissions.user_modules(who))
+    mods -= set(['start'])
     non_admin_mods = mods - admin_mods
     descs = [ '/' + i + ': ' + Permissions.info(i) for i in non_admin_mods ]
 
