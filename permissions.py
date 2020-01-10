@@ -75,6 +75,14 @@ class Permissions:
         }
         cls._update(data)
 
+    @classmethod
+    def admin_modules(cls):
+        return set(cls._admin_modules)
+
+    @classmethod
+    def is_admin(cls, user):
+        return user in cls._admins
+
     ### Other ###
 
     @classmethod
@@ -114,7 +122,8 @@ class Permissions:
                 users.add(i)
                 uids.add(k)
             # Group sanity check
-            assert uids == set(data['groups']['core']['everyone']), 'everyone not inclusive'
+            assert uids == set(data['groups']['core']['everyone']), \
+                'everyone group does not contain all users'
             assert len(data['groups']['core']['admin']) > 0, 'no admin'
             assert len(data['groups']['core']) == 2, 'core module miscount'
             groups = set()
@@ -132,6 +141,10 @@ class Permissions:
                     assert i in groups, 'non-existing group referenced'
                 for i in values['users']:
                     assert i in uids, 'non-existing user referenced'
+                if 'admin' in values['groups']:
+                    err = 'admin group must be used in isolation'
+                    assert len(values['groups']) == 1, err
+                    assert len(values['users']) == 0, err
                 assert values['info'] != '', 'empty info field'
                 modules.add(name)
         except AssertionError as err:
@@ -162,6 +175,11 @@ class Permissions:
             cls._groups[grp] = [ inverted[i] for i in values ]
         # Save info
         cls._info = { i : k['info'] for i,k in data['modules'].items() }
+        # Save admin modules
+        is_admin = lambda entry : 'admin' in entry['groups']
+        cls._admin_modules = [ i for i,k in data['modules'].items() if is_admin(k) ]
+        # Save admins
+        cls._admins = set([ inverted[i] for i in data['groups']['core']['admin']])
 
     @classmethod
     def _update(data):
