@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
 import sys
-import logging
 
 from telegram.ext import Updater
 
-from auth import Auth
-from admin import Admin
+import logging
 from loader import Loader
-from importer import Importer
+from permissions import Permissions
 
 
 ######################################################################
@@ -18,70 +16,14 @@ from importer import Importer
 ######################################################################
 
 
-core_module_path = './core-modules/'
-module_path = './modules/'
 container_hostname = 'zac-bot'
-
-
-######################################################################
-#                                                                    #
-#                           Error Handling                           #
-#                                                                    #
-######################################################################
-
-
-
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-	level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Error handler
-def error(_, context):
-    logger.warning('Update caused error "%s"', context.error)
-    raise
-
-
-######################################################################
-#                                                                    #
-#                           Native Modules                           #
-#                                                                    #
-######################################################################
-
-
-# Start / help
-def start(update, context):
-
-    # Ignore unprivileged people
-    uname = update._effective_chat.username
-    if not Auth.is_privileged(uname):
-        return
-
-    # Get descriptions of commands
-    groups = Loader.get_loaded_modules()
-    msgs = [  ]
-    def to_instr(cmd, data):
-        return '/' + cmd + ': ' + data
-    for i in groups:
-        if Auth.has_access(uname, i):
-            msgs.append(to_instr(i, Auth.description(i)))
-    msgs.append(to_instr('help', 'This dialog'))
-
-    # Reply
-    msg = 'Authorized user detected.'
-    msg += 'You have access to the following commands:'
-    delim = '\n    '
-    msg += delim + delim.join(msgs)
-    update.message.reply_text(msg)
-
-def help_fn(update, context):
-    start(update, context)
-
-def unknown(update, _):
-    uname = update._effective_chat.username
-    if Auth.is_privileged(uname):
-        msg = 'Unknown command. See /help for available commands.'
-        update.message.reply_text(msg)
+permisions_f = './permissions.json'
+module_path = './modules/'
+module_ordered_path = [
+    './core-modules/',
+    module_path
+]
+logging.basicConfig(format='%(levelname)s - %(message)s', level=logging.INFO)
 
 
 ######################################################################
@@ -91,49 +33,55 @@ def unknown(update, _):
 ######################################################################
 
 
+# Error handler
+def error(_, context):
+    logging.warning('Update caused error "%s"', context.error)
+    raise
+
+# Fallback option
+def unknown(update, _):
+    uname = update._effective_chat.username
+    if Permissions.is_user(uname):
+        msg = 'Unknown command. See /help for available commands.'
+        update.message.reply_text(msg)
+
+# Check to see this is running in container_hostname
+def is_in_container():
+    with open('/proc/sys/kernel/hostname') as f:
+        hostname = f.read().strip()
+    return hostname == container_hostname
+
+
 def main(_):
 
     # For security
-    with open('/proc/sys/kernel/hostname') as f:
-        hostname = f.read().strip()
-    if hostname != container_hostname:
-        print('Error: Not executing from container!')
+    if not is_in_container():
+        logging.error('Error: Not executing from container!')
         sys.exit(1)
 
-    # Create the updater
+    # Telegram API setup
     updater = None
     with open('token.priv') as f:
         updater = Updater(f.read().strip(), use_context=True)
-    Admin.setup(updater)
+    dp = updater.dispatcher
 
     # Create handler registration
-    dp = updater.dispatcher
-    Loader.setup(dp, module_path)
+    Permissions.setup(permisions_f)
+    invoke_extra_args = {
+        'pubkey' : module_path,
+        'kill' : updater.stop
+    }
+    Loader.setup(dp, module_ordered_path, invoke_extra_args, unknown, error)
 
-    # Install start and help
-    Loader.install_builtin('start', start)
-    Loader.install_builtin('help', help_fn)
-    Loader.install_fallback(unknown)
-
-    # Create install list
-    Importer.setup(core_module_path, module_path)
-    Importer.import_all()
-    install_list = Importer.get_imported()
-
-    # Verify install list
-    must_be_empty = [ i for i in Auth.groups() if i not in install_list.keys() ]
-    err_msg = "modules.install_list does not contain the elements of auth.json"
-    assert len(must_be_empty) == 0, err_msg
-
-    # Install modules
-    for name in Auth.groups():
-        fn = install_list[name]
-        Loader.install_module(name, fn)
-
-    # Log all errors
-    dp.add_error_handler(error)
+    # Load modules
+    for mod in Permissions.modules():
+        try:
+            Loader.load(mod)
+        except ModuleNotFoundError as err:
+            logging.warning(str(err))
 
     # Start the Bot
+    logging.info('Initiating polling.')
     updater.start_polling()
 
     # Block until you press Ctrl-C or the process receives SIGINT, SIGTERM or

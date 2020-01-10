@@ -1,32 +1,27 @@
-from auth import Auth
+from permissions import Permissions
+from utils import user, reply, djoin, cid
+import logging
 
 
-def invoke(_, update, context):
+def invoke(update, context, _):
     uname = update._effective_chat.username
-    print('@' + uname + ' invoked /auth ' + ' '.join(context.args))
+    logging.info('@' + uname + ' invoked /auth ' + ' '.join(context.args))
     usage = 'Usage: /auth <command> <args>'
     try:
-        fn = cmds[context.args[0]]
-        fn(update, context, context.args[1:])
+        cmds[context.args[0]](update, context, context.args[1:])
     except (KeyError, IndexError):
-        assert len(cmds.keys()) > 0
-        msg = usage + '\nCommands:'
-        msg += delim + delim.join(cmds.keys())
-        reply(update, msg)
+        reply(update, usage + '\nCommands:' + djoin(cmds.keys()))
 
-def reply(update, msg):
-    update.message.reply_text(msg)
-
-
-def refresh_auth(update, _, _2):
-    msg = 'auth info refreshed'
-    Auth.refresh()
-    update.message.reply_text(msg)
+def refresh_auth(update, *_):
+    try:
+        Permissions.load()
+    except AssertionError:
+        raise
+    reply(update, 'Permissions refreshed')
 
 def view_auth(update, context, _):
-    chat_id = update.message.chat_id
-    with open(Auth.auth_f, 'rb') as f:
-        context.bot.send_document(chat_id=chat_id, document=f)
+    with open(Permissions.f, 'rb') as f:
+        context.bot.send_document(chat_id=cid(update), document=f)
 
 def auth_template(select):
     auth_options = {

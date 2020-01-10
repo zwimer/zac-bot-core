@@ -1,95 +1,113 @@
+import importlib
+import traceback
+import logging
+
 from telegram.ext import (
     MessageHandler,
     CommandHandler,
     DispatcherHandlerStop,
     Filters
 )
-from auth import Auth
 
+from permissions import Permissions
+from utils import reply
 
 class Loader:
-    _handlers = {}
-    _modules = set()
-    _builtins = set()
-    _setup = False
+    _py_mods = {}
+    _installed = {}
+    _fallback_g = 9999
+    _g = 1000
 
     #################### Public ####################
 
-    # Installed handlers
     @classmethod
-    def setup(cls, dp, module_path):
-        cls._m_path = module_path
-        cls._setup = True
+    def setup(cls, dp, ordered_dirs, passthrough, fallback, error_handler):
+        assert len(ordered_dirs) > 0
+        assert cls._g < cls._fallback_g
+        assert 0 < cls._g
         cls._dp = dp
+        cls._ordered_dirs = ordered_dirs
+        cls._pass = passthrough
+        cls._install_error_handler(error_handler)
+        cls._install_fallback(fallback)
 
     @classmethod
-    def install_fallback(cls, fallback):
-        assert cls._setup
-        name = 'builtin_unknown_fallback_message_handler'
-        assert name not in cls._builtins
-        cls._builtins.add(name)
-        handler = MessageHandler(Filters.command, fallback)
-        cls._install_handler(handler, name, cls._groups.fallback)
+    def load(cls, module):
+        assert module not in cls._installed, 'module already loaded'
+        assert Permissions.is_protected(module), 'module not authorized'
+        # Priority given to earlier dirs
+        for dir_ in cls._ordered_dirs:
+            try:
+                cls._load(module, dir_)
+                logging.info('Successfully loaded ' + module)
+                # Only one module of this name peritted
+                return
+            except ModuleNotFoundError:
+                pass
+            except Exception as err:
+                logging.error('Error loading ' + module + traceback.format_exc())
+                break
+        msg = 'Load("' + module + '") failed'
+        raise ModuleNotFoundError(msg)
 
-    # Used to install builtin commands
     @classmethod
-    def install_builtin(cls, name, fn):
-        assert cls._setup
-        assert name not in cls._builtins
-        cls._builtins.add(name)
-        cls._install(name, fn, cls._groups.builtin)
+    def unload(cls, module):
+        assert module in cls._installed, 'module not loaded'
+        handler = cls._installed.pop(module)
+        cls._dp.remove_handler(handler, cls._g)
 
-    # Used to install module commands, protected by auth
     @classmethod
-    def install_module(cls, name, raw_fn):
-        assert cls._setup
-        assert name not in cls._modules
-        cls._modules.add(name)
-        pathed_fn = lambda a, b : raw_fn(cls._m_path, a, b)
-        fn = Auth.secure_module(pathed_fn, name)
-        reqs = Auth.requirements(name)
-        cls._install(name, fn, cls._groups.modules, **reqs)
-
-    # Used to uninstall module commands
-    @classmethod
-    def uninstall_module(cls, name):
-        assert cls._setup
-        assert name in cls._modules
-        cls._modules.remove(name)
-        group = cls._groups.modules
-        hid = cls._to_handler_id(name, group)
-        handler = cls._handlers.pop(hid)
-        cls._dp.remove_handler(handler, group)
-
-    # Get loaded modules
-    @classmethod
-    def get_loaded_modules(cls):
-        return cls._modules
+    def loaded(cls):
+        return cls._installed.keys()
 
     #################### Private ####################
 
-    # Groups
-    class _groups:
-        builtin = 0
-        modules = 1
-        fallback = 999
+    @classmethod
+    def _load(cls, module, package):
+        mod = cls._reimport(module, package)
+        try:
+            fn = mod.invoke
+        except AttributeError:
+            logging.error('Module "' + module + '" has no "invoke" function')
+            raise
 
-    @staticmethod
-    def _to_handler_id(name, group):
-        return name + ' - ' + str(group)
+        cls._install_handler(module, mod.invoke)
 
     @classmethod
-    def _install(cls, name, fn, group, **kwargs):
-        assert cls._setup
-        def terminal_fn(*args, **kwargs):
-            fn(*args, **kwargs)
+    def _reimport(cls, module, dir_):
+        if module not in cls._py_mods:
+            package = dir_.replace('./', '').replace('/', '')
+            mod = importlib.import_module('.' + module, package)
+        else:
+            mod = importlib.reload(cls._py_mods[module])
+        cls._py_mods[module] = mod
+        return mod
+
+    @classmethod
+    def _install_handler(cls, module, handler):
+        # Secure the function and ensure dispatch termination when complete
+        safe = Permissions.secure_module(module, handler)
+        def terminal_fn(update, context):
+            try:
+                extra_args = cls._pass[module] if module in cls._pass else None
+                safe(update, context, extra_args)
+            except Exception as err:
+                msg = 'Error invoking ' + module + '.invoke: '
+                msg += traceback.format_exc()
+                logging.error(msg)
+                reply(update, 'Internal error.')
             raise DispatcherHandlerStop()
-        handler = CommandHandler(name, terminal_fn, **kwargs)
-        cls._install_handler(handler, name, group)
+        # Install the handler
+        handler = CommandHandler(module, terminal_fn)
+        cls._dp.add_handler(handler, cls._g)
+        cls._installed[module] = handler
 
     @classmethod
-    def _install_handler(cls, handler, name, group):
-        hid = cls._to_handler_id(name, group)
-        cls._handlers[hid] = handler
-        cls._dp.add_handler(handler, group)
+    def _install_fallback(cls, fallback):
+        cls._fallback = MessageHandler(Filters.command, fallback)
+        cls._dp.add_handler(cls._fallback, cls._fallback_g)
 
+    @classmethod
+    def _install_error_handler(cls, handler):
+        cls._dp.add_error_handler(handler)
+        cls._error_hander = handler

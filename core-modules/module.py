@@ -1,101 +1,77 @@
-from auth import Auth
+from utils import user, reply, djoin
+from permissions import Permissions
 from loader import Loader
-from importer import Importer
+import logging
 
 
-def invoke(_, update, context):
-    uname = update._effective_chat.username
-    print('@' + uname + ' invoked /module ' + ' '.join(context.args))
+def invoke(update, context, _):
+    logging.info('@' + user(update) + ' invoked /module ' + ' '.join(context.args))
     usage = 'Usage: /module <command> <args>'
     try:
         fn = cmds[context.args[0]]
-        fn(update, context, context.args[1:])
+        fn(update, context.args[1:])
     except (KeyError, IndexError):
         assert len(cmds.keys()) > 0
-        msg = usage + '\nCommands:'
-        msg += delim + delim.join(cmds.keys())
+        msg = usage + '\nCommands:' + djoin(cmds.keys())
         reply(update, msg)
 
-def reply(update, msg):
-    update.message.reply_text(msg)
 
+def list_module(update, *_):
+    reply(update, 'Modules:' + djoin(Permissions.modules()))
 
-def load_module(update, _, args, *, cmd='load'):
-    importable = Auth.groups()
+def load_module(update, args, *, cmd='load'):
     try:
         mod = args[0]
-        assert mod not in Loader.get_loaded_modules(), '1'
-        assert mod in importable, '3'
-        if mod in Importer.get_imported():
-            reply(update, 'Module already imported. Loading.')
-        else:
-            Importer.import_module(mod)
-        imported = Importer.get_imported()
-        Loader.install_module(mod, imported[mod])
+        Loader.load(mod)
         reply(update, mod + ' successfully loaded')
         return True
     except (AssertionError, IndexError) as e:
-        print(e)
         msg = 'Usage: /module ' + cmd + ' <module>'
-        imported = Importer.get_imported().keys()
-        unimported = [ i for i in importable if i not in imported ]
-        if len(unimported) == 0:
-            msg += '\nNothing to load. Everything is currently imported'
-        else:
-            msg += '\nUnimported modules:' + delim + delim.join(unimported)
+        unloaded = [ i for i in Permissions.modules() if i not in Loader.loaded() ]
+        msg += '\nUnloaded modules:' + djoin(unloaded)
         reply(update, msg)
         return False
+    except Exception as e:
+        reply(update, 'Failed to load module.')
+        raise
 
-def reload_module(update, _, args):
-    if unload_module(update, _, args, cmd='reload'):
-        load_module(update, _, args, cmd='reload')
+def reload_module(update, args):
+    if unload_module(update, args, cmd='reload'):
+        load_module(update, args, cmd='reload')
 
-def unload_module(update, _, args, *, cmd='unload'):
+def unload_module(update, args, *, cmd='unload'):
     try:
         mod = args[0]
-        assert mod in Loader.get_loaded_modules()
-        assert mod in Importer.get_imported()
-        Loader.uninstall_module(mod)
-        Importer.unimport_module(mod)
+        Loader.unload(mod)
         reply(update, mod + ' successfully unloaded')
         return True
     except (AssertionError, IndexError):
         msg = 'Usage: /module ' + cmd + ' <module>'
-        imported = Importer.get_imported().keys()
-        msg += '\nImported modules:' + delim + delim.join(imported)
+        msg += '\nLoaded modules:' + djoin(Loader.loaded())
         reply(update, msg)
         return False
 
-def reset_modules(update, _, _2):
-    loaded = [ i for i in Loader.get_loaded_modules() ]
-    for i in loaded:
-        unload_module(update, _, [i])
-    dangline_imports = [ i for i in Importer.get_imported() ]
-    for i in dangline_imports:
-        Importer.unimport_module(i)
-    failed = []
-    for i in Auth.groups():
+def reset_modules(update, _):
+    for i in list(Loader.loaded()):
+        Loader.unload(i)
+    reply(update, 'All modules unloaded. Loading modules.')
+    success = []
+    for mod in Permissions.modules():
         try:
-            if load_module(update, _, [i]) is False:
-                reply(update, 'Failed to load module "' + i + '" for unknown reason')
-                failed.append(i)
-        except Exception as err:
-            reply(update, 'Failed to load module "' + i + '" with exception: {0}'.format(err))
-            failed.append(i)
-    if len(failed) > 0:
-        msg = 'Failed to load the following modules:'
-        msg += delim + delim.join(failed)
-    else:
-        msg = 'Successfully reset modules.'
-    reply(update, msg)
+            Loader.load(mod)
+            success.append(mod)
+        except ModuleNotFoundError as err:
+            reply(update, str(err))
+            logging.warning(str(err))
+    if len(success) > 0:
+        msg = 'Successfully loaded:' + djoin(success)
+        reply(update, msg)
 
 
 cmds = {
+    'list' : list_module,
     'load' : load_module,
     'reload' : reload_module,
     'unload' : unload_module,
     'reset' : reset_modules
 }
-
-delim = '\n    '
-

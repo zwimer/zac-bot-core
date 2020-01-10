@@ -1,17 +1,13 @@
-from admin import Admin
+from utils import user, reply
+import logging
 
 
-def invoke(_, update, context):
-    uname = update._effective_chat.username
-    print('@' + uname + ' invoked /kill ' + ' '.join(context.args))
+def invoke(update, context, stop):
     reqs = [ 'verified' ]
-    usage = 'Usage: /kill ' + ' '.join(reqs)
     try:
         assert reqs == context.args
         reply(update, 'Goodbye')
-        Admin.kill()
+        logging.warning('@' + user(update) + ' invoked /kill')
+        stop()
     except AssertionError:
-        reply(update, usage)
-
-def reply(update, msg):
-    update.message.reply_text(msg)
+        reply(update, 'Usage: /kill ' + ' '.join(reqs))

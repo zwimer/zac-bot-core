@@ -2,5 +2,7 @@ version: "3"
 services:
     zac-bot:
         build: .
+        image: zac-bot:latest
+        container_name: zac-bot
         hostname: zac-bot
         command: ./main.py
