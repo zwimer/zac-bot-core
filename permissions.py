@@ -127,6 +127,7 @@ class Permissions:
         assert user in cls._users, 'no such user'
         assert group in cls._groups, 'no such group'
         assert user not in cls._groups[group], 'user already in group'
+        assert group != 'everyone', 'will not edit everyone group'
         data = cls._data_copy()
         data['groups']['configurable'][group].append(data['users'][user])
         cls._update(data)
@@ -146,7 +147,8 @@ class Permissions:
     def add_group_to_module(cls, group, module):
         assert group in cls._groups, 'no such group'
         assert module in cls._modules, 'no such module'
-        assert group not in cls._raw_data['modules']['groups'], 'group already has access to module'
+        assert group not in cls._raw_data['modules'][module]['groups'], \
+            'group already has access to module'
         assert module not in cls._admin_modules, \
             'will not add group to an admin module.\nConsider adding user to admin group.'
         data = cls._data_copy()
@@ -163,13 +165,11 @@ class Permissions:
         data = cls._data_copy()
         uid = data['users'][user]
         del data['users'][user]
-
         for grp in data['groups'].values():
             for i,k in grp.items():
                 if uid in k:
                     k.remove(uid)
                 assert uid not in k, 'remove_user sanity check failed'
-
         for i,k in data['modules'].items():
             if uid in k['users']:
                 k['users'].remove(uid)
@@ -197,6 +197,44 @@ class Permissions:
 
     ### Remove from ###
 
+    @classmethod
+    def remove_user_from_group(cls, user, group):
+        assert user in cls._users, 'no such user'
+        assert group in cls._groups, 'no such group'
+        assert group != 'everyone', 'will not edit everyone group'
+        assert user in cls._groups[group], 'user not in group'
+        data = cls._data_copy()
+        data['groups']['configurable'][group].remove(data['users'][user])
+        assert user not in data['groups']['configurable'], \
+            'remove_user_from_group sanity check failed'
+        cls._update(data)
+
+    @classmethod
+    def remove_user_from_module(cls, user, module):
+        assert user in cls._users, 'no such user'
+        assert module in cls._modules, 'no such module'
+        assert user in cls._modules[module], 'user does not have access to module'
+        uid = cls._raw_data['users'][user]
+        assert uid in cls._raw_data['modules'][module]['users'], \
+            'user only has access to module via a group'
+        data = cls._data_copy()
+        data['modules'][module]['users'].remove(uid)
+        assert user not in data['modules'][module]['users'], \
+            'remove_user_from_module sanity check failed'
+        cls._update(data)
+
+    @classmethod
+    def remove_group_from_module(cls, group, module):
+        assert group in cls._groups, 'no such group'
+        assert module in cls._modules, 'no such module'
+        assert group in cls._raw_data['modules'][module]['groups'], 'group not in module'
+        data = cls._data_copy()
+        data['modules'][module]['groups'].remove(group)
+        assert group not in data['modules'][module]['groups'], \
+            'remove_group_from_module sanity check failed'
+        cls._update(data)
+
+
     ############################# Private #############################
 
     @classmethod
@@ -211,9 +249,9 @@ class Permissions:
 
     @staticmethod
     def _verify(data, log_result = False):
-        def all_unique(x):
-            return len(list(x)) == len(set(x))
         try:
+            def all_unique(x):
+                return len(list(x)) == len(set(x))
 
             # General
             assert data.keys() == set(['users', 'groups', 'modules']), 'top level keys invalid'
@@ -236,7 +274,7 @@ class Permissions:
             assert data['groups']['core'].keys() == set(['admin', 'everyone' ]), 'core keys invalid'
             assert uids == set(data['groups']['core']['everyone']), \
                 'everyone group does not match all uids'
-            assert len(data['groups']['core']['admin']) > 0, 'no admin'
+            assert len(data['groups']['core']['admin']) > 0, 'admin group may not be empty'
             assert len(data['groups']['core']) == 2, 'core module miscount'
             groups = []
             for i,k in data['groups']['core'].items():

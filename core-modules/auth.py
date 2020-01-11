@@ -106,13 +106,13 @@ def add_mod(_, module, desc):
 def remove_user(_, user):
     Permissions.remove_user(user)
 
-# @passthrough('<user> <group>')
-# def add_user_to_group(_, user, group):
-#     Permissions.add_user_to_group(user, group)
+@passthrough('<user> <group>')
+def remove_user_from_group(_, user, group):
+    Permissions.remove_user_from_group(user, group)
 
-# @passthrough('<user> <module>')
-# def add_user_to_mod(_, user, module):
-#     Permissions.add_user_to_module(user, module)
+@passthrough('<user> <module>')
+def remove_user_from_mod(_, user, module):
+    Permissions.remove_user_from_module(user, module)
 
 ############ Group ############
 
@@ -120,9 +120,9 @@ def remove_user(_, user):
 def remove_group(_, group):
     Permissions.remove_group(group)
 
-# @passthrough('<group> <module>')
-# def add_group_to_mod(_, group, module):
-#     Permissions.add_group_to_module(group, module)
+@passthrough('<group> <module>')
+def remove_group_from_mod(_, group, module):
+    Permissions.remove_group_from_module(group, module)
 
 ############ Module ############
 
@@ -154,13 +154,13 @@ cmds = {
     },
     'remove' : {
         'user' : {
-            'user' : remove_user
-    #         'group' : remove_user_from_group,
-    #         'module' : remove_user_from_mod
+            'user' : remove_user,
+            'group' : remove_user_from_group,
+            'module' : remove_user_from_mod
         },
         'group' : {
-            'group' : remove_group
-    #         'module' : remove_group_from_mod
+            'group' : remove_group,
+            'module' : remove_group_from_mod
         },
         'module' : remove_mod
     }
