@@ -1,8 +1,7 @@
-def djoin(lst):
-    delim = '\n    '
+def djoin(lst, delim = '\n    '):
     return delim + delim.join(lst)
 
-def user(update):
+def whois(update):
     return update._effective_chat.username
 
 def reply(update, msg):

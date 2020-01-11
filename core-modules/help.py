@@ -1,4 +1,4 @@
-from utils import user, djoin, reply
+from utils import whois, djoin, reply
 from permissions import Permissions
 from loader import Loader
 
@@ -6,7 +6,7 @@ from loader import Loader
 def invoke(update, context, _):
 
     # Ignore unprivileged people
-    who = user(update)
+    who = whois(update)
     if not Permissions.is_user(who):
         return
 

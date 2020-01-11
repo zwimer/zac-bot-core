@@ -1,4 +1,5 @@
 from copy import deepcopy
+import logging
 import json
 
 import utils
@@ -6,14 +7,14 @@ import utils
 
 class Permissions:
 
-    #################### Public ####################
+    ############################# Public #############################
 
     @classmethod
     def setup(cls, f):
         cls.f = f
         cls.load()
 
-    ### Getters ###
+    ##################### Getters #####################
 
     @classmethod
     def info(cls, module):
@@ -31,7 +32,11 @@ class Permissions:
     def modules(cls):
         return cls._modules.keys()
 
-    ### Determiners ###
+    @classmethod
+    def admin_modules(cls):
+        return set(cls._admin_modules)
+
+    ##################### Determiners #####################
 
     @classmethod
     def is_protected(cls, module):
@@ -45,7 +50,47 @@ class Permissions:
     def user_modules(cls, user):
         return cls._users[user]
 
-    ### Setters ###
+    @classmethod
+    def is_admin(cls, user):
+        return user in cls._admins
+
+    ##################### Other #####################
+
+    @classmethod
+    def secure_module(cls, module, fn):
+        def wrapper(update, *args, **kwargs):
+            if utils.whois(update) in cls._modules[module]:
+                fn(update, *args, **kwargs), 'module already loaded'
+        return wrapper
+
+    @classmethod
+    def load(cls):
+        data = cls._read_json(cls.f)
+        cls._verify(data, True)
+        cls._load_data(data)
+
+    ##################### Config #####################
+
+    ############ Info ############
+
+    @classmethod
+    def user_info(cls, user):
+        assert user in cls._users
+        return list(cls._users[user])
+
+    @classmethod
+    def group_info(cls, group):
+        assert group in cls._groups
+        return list(cls._groups[group])
+
+    @classmethod
+    def module_info(cls, module):
+        assert module in cls._modules
+        return list(cls._modules[module])
+
+    ############ Add ############
+
+    ### Basic ###
 
     @classmethod
     def add_user(cls, name):
@@ -53,14 +98,14 @@ class Permissions:
         data = cls._data_copy()
         uid = 1 + max(-1, *data['users'].values())
         data['groups']['core']['everyone'].append(uid)
-        data[name] = uid
+        data['users'][name] = uid
         cls._update(data)
 
     @classmethod
     def add_group(cls, group):
         assert group not in cls._groups, 'group already exists'
         data = cls._data_copy()
-        data['groups'][group] = [ ]
+        data['groups']['configurable'][group] = [ ]
         cls._update(data)
 
     @classmethod
@@ -75,33 +120,87 @@ class Permissions:
         }
         cls._update(data)
 
-    @classmethod
-    def admin_modules(cls):
-        return set(cls._admin_modules)
+    ### Add to ###
 
     @classmethod
-    def is_admin(cls, user):
-        return user in cls._admins
-
-    ### Other ###
-
-    @classmethod
-    def secure_module(cls, module, fn):
-        def wrapper(update, *args, **kwargs):
-            if utils.user(update) in cls._modules[module]:
-                fn(update, *args, **kwargs), 'module already loaded'
-        return wrapper
+    def add_user_to_group(cls, user, group):
+        assert user in cls._users, 'no such user'
+        assert group in cls._groups, 'no such group'
+        assert user not in cls._groups[group], 'user already in group'
+        data = cls._data_copy()
+        data['groups']['configurable'][group].append(data['users'][user])
+        cls._update(data)
 
     @classmethod
-    def load(cls):
-        cls._raw_data = cls._read_json(cls.f)
-        cls._verify(cls._raw_data, True)
-        cls._load_data(cls._raw_data)
-
-    #################### Private ####################
+    def add_user_to_module(cls, user, module):
+        assert user in cls._users, 'no such user'
+        assert module in cls._modules, 'no such module'
+        assert user not in cls._modules[module], 'user already has access to module'
+        assert module not in cls._admin_modules, \
+            'will not add user to an admin module.\nConsider adding user to admin group.'
+        data = cls._data_copy()
+        data['modules'][module]['users'].append(data['users'][user])
+        cls._update(data)
 
     @classmethod
-    def data_copy(cls):
+    def add_group_to_module(cls, group, module):
+        assert group in cls._groups, 'no such group'
+        assert module in cls._modules, 'no such module'
+        assert group not in cls._raw_data['modules']['groups'], 'group already has access to module'
+        assert module not in cls._admin_modules, \
+            'will not add group to an admin module.\nConsider adding user to admin group.'
+        data = cls._data_copy()
+        data['modules'][module]['groups'].append(group)
+        cls._update(data)
+
+    ############ Remove ############
+
+    ### Basic ###
+
+    @classmethod
+    def remove_user(cls, user):
+        assert user in cls._users, 'no such user'
+        data = cls._data_copy()
+        uid = data['users'][user]
+        del data['users'][user]
+
+        for grp in data['groups'].values():
+            for i,k in grp.items():
+                if uid in k:
+                    k.remove(uid)
+                assert uid not in k, 'remove_user sanity check failed'
+
+        for i,k in data['modules'].items():
+            if uid in k['users']:
+                k['users'].remove(uid)
+                assert uid not in k['users'], 'remove_user sanity check failed'
+        cls._update(data)
+
+    @classmethod
+    def remove_group(cls, group):
+        assert group in cls._groups, 'no such group'
+        assert group not in cls._raw_data['groups']['core'], 'will not remove core group'
+        data = cls._data_copy()
+        del data['groups']['configurable'][group]
+        for i,k in data['modules'].items():
+            if group in k['groups']:
+                k['groups'].remove(group)
+                assert group not in k['groups'], 'remove_group sanity check failed'
+        cls._update(data)
+
+    @classmethod
+    def remove_module(cls, module):
+        assert module in cls._modules, 'no such module'
+        data = cls._data_copy()
+        del data['modules'][module]
+        cls._update(data)
+
+    ### Remove from ###
+
+    ############################# Private #############################
+
+    @classmethod
+    def _data_copy(cls):
         return deepcopy(cls._raw_data)
 
     @staticmethod
@@ -112,49 +211,73 @@ class Permissions:
 
     @staticmethod
     def _verify(data, log_result = False):
+        def all_unique(x):
+            return len(list(x)) == len(set(x))
         try:
+
+            # General
+            assert data.keys() == set(['users', 'groups', 'modules']), 'top level keys invalid'
+
             # User sanity check
-            uids = set()
-            users = set()
+            uids = []
+            users = []
             for i, k in data['users'].items():
                 assert i not in users, 'duplicate user'
                 assert k not in uids, 'duplicate uid'
-                users.add(i)
-                uids.add(k)
+                users.append(i)
+                uids.append(k)
+            assert all_unique(uids), 'uids sanity check'
+            assert all_unique(users), 'users sanity check'
+            users = set(users)
+            uids = set(uids)
+
             # Group sanity check
+            assert data['groups'].keys() == set(['core', 'configurable']), 'groups keys invalid'
+            assert data['groups']['core'].keys() == set(['admin', 'everyone' ]), 'core keys invalid'
             assert uids == set(data['groups']['core']['everyone']), \
-                'everyone group does not contain all users'
+                'everyone group does not match all uids'
             assert len(data['groups']['core']['admin']) > 0, 'no admin'
             assert len(data['groups']['core']) == 2, 'core module miscount'
-            groups = set()
-            for i in data['groups']['core']:
+            groups = []
+            for i,k in data['groups']['core'].items():
                 assert i not in groups, 'duplicate core group'
-                groups.add(i)
-            for i in data['groups']['configurable']:
+                assert all_unique(k), 'user repeats in group ' + i
+                groups.append(i)
+            for i,k in data['groups']['configurable'].items():
                 assert i not in groups, 'duplicate configurable group'
-                groups.add(i)
+                assert all_unique(k), 'user repeats in group ' + i
+                groups.append(i)
+            assert all_unique(groups), 'groups sanity check'
+            groups = set(groups)
+
             # Modules sanity check
-            modules = set()
-            for name, values in data['modules'].items():
+            modules = []
+            for name, value in data['modules'].items():
+                assert value.keys() == set([ 'info', 'users', 'groups' ]), 'module(' + name + ') keys invalid'
                 assert name not in modules, 'duplicate module'
-                for i in values['groups']:
+                assert all_unique(value['users']), 'user repeats in module ' + name
+                assert all_unique(value['groups']), 'group repeats in module ' + name
+                for i in value['groups']:
                     assert i in groups, 'non-existing group referenced'
-                for i in values['users']:
+                for i in value['users']:
                     assert i in uids, 'non-existing user referenced'
-                if 'admin' in values['groups']:
+                if 'admin' in value['groups']:
                     err = 'admin group must be used in isolation'
-                    assert len(values['groups']) == 1, err
-                    assert len(values['users']) == 0, err
-                assert values['info'] != '', 'empty info field'
-                modules.add(name)
+                    assert len(value['groups']) == 1, err
+                    assert len(value['users']) == 0, err
+                assert value['info'] != '', 'empty info field'
+                modules.append(name)
+            assert all_unique(modules), 'modules sanity check'
+
         except AssertionError as err:
             if log_result:
-                logging.error(cls.f + ' failed to load with error: ' + str(err))
+                logging.error('Failed to verify permissions config with error: ' + str(err))
             raise
 
     @classmethod
     def _load_data(cls, data):
-        # Preprocess data
+        cls._raw_data = data
+        # Save modules
         mods = {}
         groups = { **data['groups']['core'], **data['groups']['configurable'] }
         for key, value in data['modules'].items():
@@ -163,7 +286,6 @@ class Permissions:
                 uids |= set(groups[grp])
             mods[key] = uids
         inverted = { k : i for i,k in data['users'].items() }
-        # Save modules
         cls._modules = { b : [ inverted[i] for i in c ] for b,c in mods.items() }
         # Save users
         cls._users = { }
@@ -182,9 +304,9 @@ class Permissions:
         cls._admins = set([ inverted[i] for i in data['groups']['core']['admin']])
 
     @classmethod
-    def _update(data):
+    def _update(cls, data):
         cls._verify(data)
+        outs = json.dumps(data, sort_keys=True, indent=4, separators=(',', ' : '))
         cls._load_data(data)
-        outs = json.loads(data)
         with open(cls.f, 'w') as f:
             f.write(outs)

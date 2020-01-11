@@ -1,105 +1,169 @@
 from permissions import Permissions
-from utils import user, reply, djoin, cid
+from utils import whois, reply, djoin, cid
 import logging
 
 
 def invoke(update, context, _):
-    uname = update._effective_chat.username
-    logging.info('@' + uname + ' invoked /auth ' + ' '.join(context.args))
-    usage = 'Usage: /auth <command> <args>'
-    try:
-        cmds[context.args[0]](update, context, context.args[1:])
-    except (KeyError, IndexError):
-        reply(update, usage + '\nCommands:' + djoin(cmds.keys()))
+    uname = whois(update)
+    invocation = '/' + mod_name + djoin(context.args, ' ')
+    logging.info('@' + uname + ' invoked ' + invocation)
+    explore_tree(update, context, context.args, cmds, [])
 
+
+def explore_tree(update, context, args, cmd, chain):
+    try:
+        opt = args[0]
+        res = cmd[opt]
+        chain.append(opt)
+        if isinstance(res, dict):
+            explore_tree(update, context, args[1:], res, chain)
+        else:
+            res(update, context, args[1:], chain)
+    except (IndexError, KeyError):
+        usage = 'usage: /' + mod_name + djoin(chain, ' ') + ' <argument>\nOptions:' + djoin(cmd.keys())
+        reply(update, usage)
+
+def passthrough(fn_usage, notify_success = True):
+    def real_decorator(f):
+        def wrapper(update, context, args, chain):
+            try:
+                f(update, *args)
+                if notify_success:
+                    reply(update, 'Success')
+            except AssertionError as err:
+                reply(update, 'Error: ' + str(err))
+            except TypeError:
+                if fn_usage:
+                    chain.append(fn_usage)
+                reply(update, 'usage: /' + mod_name + djoin(chain, ' '))
+        return wrapper
+    return real_decorator
+
+##################### Handlers #####################
+
+@passthrough('')
 def refresh_auth(update, *_):
-    try:
-        Permissions.load()
-    except AssertionError:
-        raise
-    reply(update, 'Permissions refreshed')
+    Permissions.load()
 
-def view_auth(update, context, _):
+def download_auth(update, context, *_):
     with open(Permissions.f, 'rb') as f:
         context.bot.send_document(chat_id=cid(update), document=f)
 
-def auth_template(select):
-    auth_options = {
-        'info' : { 'user' : info_user, 'group' : info_group },
-        'add' : { 'user' : add_user, 'group' : add_group, 'to_group' : add_to_group },
-        'remove' : { 'user' : remove_user, 'from_group' : remove_from_group }
-    }
-    def templated(update, _, args):
-        options = auth_options[select]
-        try:
-            cmd = args[0]
-            options[cmd](update, args[1:])
-        except (KeyError, IndexError):
-            msg = 'Usage: /auth ' + select + ' <cmd> <arguments>'
-            msg += '\nCommands:' + delim + delim.join(options.keys())
-            reply(update, msg)
-    return templated
+##################### Info #####################
 
-def try_auth(update, f, args, usage, notify_success = True):
-    try:
-        ret = f(*args)
-        if notify_success:
-            reply(update, 'Success')
-        return ret
-    except AssertionError as err:
-        reply(update, 'Error: ' + str(err))
-    except TypeError:
-        reply(update, usage)
+@passthrough('<user>', False)
+def read_user(update, user):
+    mods = Permissions.user_info(user)
+    reply(update, user + ' has access to:' + djoin(mods))
 
-def info_user(update, args):
-    usage = 'Usage: /auth info user <username>'
-    groups = try_auth(update, Auth.groups_containing, args, usage, False)
-    if groups is not None:
-        msg = args[0] + ' is in the following groups:'
-        msg += delim + delim.join(groups)
-        reply(update, msg)
+@passthrough('<group>', False)
+def read_group(update, group):
+    users = Permissions.group_info(group)
+    reply(update, group + ' contains users:' + djoin(users))
 
-def info_group(update, args):
-    usage = 'Usage: /auth info group <group>'
-    users = try_auth(update, Auth.members, args, usage, False)
-    if users is not None:
-        msg = args[0] + ' contains the following users:'
-        msg += delim + delim.join(users)
-        reply(update, msg)
+@passthrough('<module>', False)
+def read_mod(update, module):
+    users = Permissions.group_info(group)
+    reply(update, module + ' can be run by:' + djoin(users))
 
-def add_user(update, args):
-    usage = 'Usage: /auth add user <username>'
-    try_auth(update, Auth.add_user, args, usage)
+##################### Add #####################
 
-def add_group(update, args):
-    usage = 'Usage: /auth add group <group> [info] [info...]'
-    try:
-        assert len(args) > 1
-        group = args[0]
-        description = ' '.join(args[1:])
-        try_auth(update, Auth.add_group, [group, description], usage)
-    except AssertionError:
-        reply(update, usage)
+############ User ############
 
-def add_to_group(update, args):
-    usage = 'Usage: /auth add to_group <username> <group>'
-    try_auth(update, Auth.add_to_group, args, usage)
+@passthrough('<user>')
+def add_user(_, user):
+    Permissions.add_user(user)
 
-def remove_user(update, args):
-    usage = 'Usage: /auth remove user <username>'
-    try_auth(update, Auth.delete_user, args, usage)
+@passthrough('<user> <group>')
+def add_user_to_group(_, user, group):
+    Permissions.add_user_to_group(user, group)
 
-def remove_from_group(update, args):
-    usage = 'Usage: /auth remove from_group <username> <group>'
-    try_auth(update, Auth.remove_from_group, args, usage)
+@passthrough('<user> <module>')
+def add_user_to_mod(_, user, module):
+    Permissions.add_user_to_module(user, module)
 
+############ Group ############
+
+@passthrough('<group>')
+def add_group(_, group):
+    Permissions.add_group(group)
+
+@passthrough('<group> <module>')
+def add_group_to_mod(_, group, module):
+    Permissions.add_group_to_module(group, module)
+
+############ Module ############
+
+@passthrough('<module> <description>')
+def add_mod(_, module, desc):
+    Permissions.add_module(module, desc)
+
+##################### Add #####################
+
+############ User ############
+
+@passthrough('<user>')
+def remove_user(_, user):
+    Permissions.remove_user(user)
+
+# @passthrough('<user> <group>')
+# def add_user_to_group(_, user, group):
+#     Permissions.add_user_to_group(user, group)
+
+# @passthrough('<user> <module>')
+# def add_user_to_mod(_, user, module):
+#     Permissions.add_user_to_module(user, module)
+
+############ Group ############
+
+@passthrough('<group>')
+def remove_group(_, group):
+    Permissions.remove_group(group)
+
+# @passthrough('<group> <module>')
+# def add_group_to_mod(_, group, module):
+#     Permissions.add_group_to_module(group, module)
+
+############ Module ############
+
+@passthrough('<module>')
+def remove_mod(_, module):
+    Permissions.remove_module(module)
+
+##################### Config #####################
 
 cmds = {
     'reload' : refresh_auth,
-    'view' : view_auth
+    'download' : download_auth,
+    'info' : {
+        'user' : read_user,
+        'group': read_group,
+        'module' : read_mod
+    },
+    'add' : {
+        'user' : {
+            'user' : add_user,
+            'group' : add_user_to_group,
+            'module' : add_user_to_mod
+        },
+        'group' : {
+            'group' : add_group,
+            'module' : add_group_to_mod
+        },
+        'module' : add_mod
+    },
+    'remove' : {
+        'user' : {
+            'user' : remove_user
+    #         'group' : remove_user_from_group,
+    #         'module' : remove_user_from_mod
+        },
+        'group' : {
+            'group' : remove_group
+    #         'module' : remove_group_from_mod
+        },
+        'module' : remove_mod
+    }
 }
-    # 'info' : auth_template('info'),
-    # 'add' : auth_template('add'),
-    # 'remove' : auth_template('remove')
-# }
-delim = '\n    '
+
+mod_name = 'auth'
