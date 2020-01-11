@@ -63,7 +63,7 @@ class Loader:
 
     @classmethod
     def pre_protection_fn(cls, module):
-        assert module in cls.pre_protection_fns
+        assert module in cls._pre_protection_fns
         return cls._pre_protection_fns[module]
 
     #################### Private ####################
