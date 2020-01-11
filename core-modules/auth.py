@@ -20,7 +20,8 @@ def explore_tree(update, context, args, cmd, chain):
         else:
             res(update, context, args[1:], chain)
     except (IndexError, KeyError):
-        usage = 'usage: /' + mod_name + djoin(chain, ' ') + ' <argument>\nOptions:' + djoin(cmd.keys())
+        usage = 'usage: /' + mod_name + djoin(chain, ' ')
+        usage += ' <arg1> [args...]\nOptions:' + djoin(cmd.keys())
         reply(update, usage)
 
 def passthrough(fn_usage, notify_success = True):
