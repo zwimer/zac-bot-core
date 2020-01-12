@@ -20,6 +20,7 @@ def list_module(update, *_):
     reply(update, 'Modules:' + djoin(Permissions.modules()))
 
 def load_module(update, args, *, cmd='load'):
+    mod = ''
     try:
         mod = args[0]
         Loader.load(mod)
@@ -31,7 +32,8 @@ def load_module(update, args, *, cmd='load'):
         msg += '\nUnloaded modules:' + djoin(unloaded)
         reply(update, msg)
         return False
-    except Exception as e:
+    except ModuleNotFoundError as err:
+        logging.error('Failed to load module "' + mod + '" with error: ' + str(err))
         reply(update, 'Failed to load module.')
         raise
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-import sys
+import sys, os
+import logging
 
 from telegram.ext import Updater
 
-import logging
 from loader import Loader
 from permissions import Permissions
 
@@ -23,7 +23,14 @@ module_ordered_path = [
     './core-modules/',
     module_path
 ]
-logging.basicConfig(format='%(levelname)s - %(message)s', level=logging.INFO)
+
+### Logging ###
+
+log_file = './zac-bot.log'
+log_config = {
+    'format' : '%(levelname)s - %(message)s',
+    'level' : logging.INFO
+}
 
 
 ######################################################################
@@ -32,6 +39,12 @@ logging.basicConfig(format='%(levelname)s - %(message)s', level=logging.INFO)
 #                                                                    #
 ######################################################################
 
+
+# Setup logs
+def setup_logs():
+    logging.basicConfig(**log_config)
+    logger = logging.getLogger()
+    logger.addHandler(logging.FileHandler(log_file))
 
 # Error handler
 def error(_, context):
@@ -53,6 +66,7 @@ def is_in_container():
 
 
 def main(_):
+    setup_logs()
 
     # For security
     if not is_in_container():
