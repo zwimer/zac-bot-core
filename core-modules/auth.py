@@ -64,7 +64,7 @@ def read_group(update, group):
 
 @passthrough('<module>', False)
 def read_mod(update, module):
-    users = Permissions.group_info(group)
+    users = Permissions.module_info(module)
     reply(update, module + ' can be run by:' + djoin(users))
 
 ##################### Add #####################

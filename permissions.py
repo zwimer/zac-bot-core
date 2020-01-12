@@ -75,17 +75,17 @@ class Permissions:
 
     @classmethod
     def user_info(cls, user):
-        assert user in cls._users
+        assert user in cls._users, 'no such user'
         return list(cls._users[user])
 
     @classmethod
     def group_info(cls, group):
-        assert group in cls._groups
+        assert group in cls._groups, 'no such group'
         return list(cls._groups[group])
 
     @classmethod
     def module_info(cls, module):
-        assert module in cls._modules
+        assert module in cls._modules, 'no such module'
         return list(cls._modules[module])
 
     ############ Add ############
@@ -129,7 +129,9 @@ class Permissions:
         assert user not in cls._groups[group], 'user already in group'
         assert group != 'everyone', 'will not edit everyone group'
         data = cls._data_copy()
-        data['groups']['configurable'][group].append(data['users'][user])
+        confg = data['groups']['configurable']
+        grp = confg if group in confg else data['groups']['core']
+        grp[group].append(data['users'][user])
         cls._update(data)
 
     @classmethod
@@ -179,7 +181,8 @@ class Permissions:
     @classmethod
     def remove_group(cls, group):
         assert group in cls._groups, 'no such group'
-        assert group not in cls._raw_data['groups']['core'], 'will not remove core group'
+        assert group not in cls._raw_data['groups']['core'], \
+            'will not remove core group'
         data = cls._data_copy()
         del data['groups']['configurable'][group]
         for i,k in data['modules'].items():
@@ -204,8 +207,10 @@ class Permissions:
         assert group != 'everyone', 'will not edit everyone group'
         assert user in cls._groups[group], 'user not in group'
         data = cls._data_copy()
-        data['groups']['configurable'][group].remove(data['users'][user])
-        assert user not in data['groups']['configurable'], \
+        confg = data['groups']['configurable']
+        grp = confg if group in confg else data['groups']['core']
+        grp[group].remove(data['users'][user])
+        assert user not in grp, \
             'remove_user_from_group sanity check failed'
         cls._update(data)
 
