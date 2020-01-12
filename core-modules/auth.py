@@ -96,7 +96,8 @@ def add_group_to_mod(_, group, module):
 ############ Module ############
 
 @passthrough('<module> <description>')
-def add_mod(_, module, desc):
+def add_mod(_, module, desc1, *descn):
+    desc = ' '.join([ desc1 ] + list(descn))
     Permissions.add_module(module, desc)
 
 ##################### Add #####################

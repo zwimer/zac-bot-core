@@ -138,7 +138,8 @@ class Permissions:
     def add_user_to_module(cls, user, module):
         assert user in cls._users, 'no such user'
         assert module in cls._modules, 'no such module'
-        assert user not in cls._modules[module], 'user already has access to module'
+        assert user not in cls._raw_data['modules'][module]['users'], \
+            'user already has access to module'
         assert module not in cls._admin_modules, \
             'will not add user to an admin module.\nConsider adding user to admin group.'
         data = cls._data_copy()
