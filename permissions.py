@@ -2,9 +2,10 @@ from copy import deepcopy
 import logging
 import json
 
-import utils
+from utils import whois, rlock_methods
 
 
+@rlock_methods
 class Permissions:
 
     ############################# Public #############################
@@ -59,7 +60,7 @@ class Permissions:
     @classmethod
     def secure_module(cls, module, fn):
         def wrapper(update, *args, **kwargs):
-            if utils.whois(update) in cls._modules[module]:
+            if whois(update) in cls._modules[module]:
                 fn(update, *args, **kwargs), 'module already loaded'
         return wrapper
 

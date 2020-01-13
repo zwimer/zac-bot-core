@@ -10,8 +10,9 @@ from telegram.ext import (
 )
 
 from permissions import Permissions
-from utils import reply
+from utils import reply, rlock_methods
 
+@rlock_methods
 class Loader:
     _py_mods = {}
     _installed = {}
