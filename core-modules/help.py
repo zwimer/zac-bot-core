@@ -1,4 +1,4 @@
-from utils import whois, djoin, reply
+from utils import djoin, reply, raw_whois
 from permissions import Permissions
 from loader import Loader
 
@@ -6,7 +6,7 @@ from loader import Loader
 def invoke(update, context, _):
 
     # Ignore unprivileged people
-    who = whois(update)
+    who = Permissions.e_whois(update)
     if not Permissions.is_user(who):
         return
 
@@ -19,14 +19,16 @@ def invoke(update, context, _):
 
     # Get descriptions of the loaded modules that the user may invoke
     mods = set(Loader.loaded()) & set(Permissions.user_modules(who))
-    mods -= set(['start'])
-    non_admin_mods = mods - admin_mods
-    descs = [ '/' + i + ': ' + Permissions.info(i) for i in non_admin_mods ]
+    mods -= set(['start', 'logout'])
+    mod_list = list(mods - admin_mods)
+    if who != raw_whois(update):
+        mod_list.append('logout')
+    descs = [ '/' + i + ': ' + Permissions.info(i) for i in mod_list ]
 
     # Reply
     if Permissions.is_admin(who):
         descs.insert(0, 'Admin: /help admin for admin modules')
-    reply(update, 'You may use:' + djoin(descs))
+    reply(update, '@' + who + ' may use:' + djoin(descs))
 
 def help_admin(update, mods):
     descs = [ '/' + i + ': ' + Permissions.info(i) for i in mods ]

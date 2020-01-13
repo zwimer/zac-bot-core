@@ -1,12 +1,10 @@
 from permissions import Permissions
-from utils import whois, reply, djoin, cid
+from utils import logged, reply, djoin, cid
 import logging
 
 
+@logged('auth')
 def invoke(update, context, _):
-    uname = whois(update)
-    invocation = '/' + mod_name + djoin(context.args, ' ')
-    logging.info('@' + uname + ' invoked ' + invocation)
     explore_tree(update, context, context.args, cmds, [])
 
 

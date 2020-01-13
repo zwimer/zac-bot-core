@@ -2,11 +2,12 @@ from copy import deepcopy
 import logging
 import json
 
-from utils import whois, rlock_methods
+from utils import raw_whois, rlock_methods
 
 
 @rlock_methods
 class Permissions:
+    _su_dict = {}
 
     ############################# Public #############################
 
@@ -14,6 +15,37 @@ class Permissions:
     def setup(cls, f):
         cls.f = f
         cls.load()
+
+    @classmethod
+    def secure_module(cls, module, fn):
+        def wrapper(update, *args, **kwargs):
+            user = cls.e_whois(update)
+            if user in cls._modules[module]:
+                fn(update, *args, **kwargs)
+        return wrapper
+
+    @classmethod
+    def e_whois(cls, update):
+        raw = raw_whois(update)
+        return cls._su_dict[raw] if raw in cls._su_dict else raw
+
+    @classmethod
+    def load(cls):
+        data = cls._read_json(cls.f)
+        cls._verify(data, True)
+        cls._load_data(data)
+
+    @classmethod
+    def add_user_translation(cls, ufrom, uto):
+        assert ufrom in cls._users, 'no such user'
+        assert uto in cls._users, 'no such user'
+        assert ufrom != uto, 'will not translate to self'
+        cls._su_dict[ufrom] = uto
+
+    @classmethod
+    def remove_user_translation(cls, ufrom):
+        assert ufrom in cls._su_dict, 'no translation to remove'
+        del cls._su_dict[ufrom]
 
     ##################### Getters #####################
 
@@ -54,21 +86,6 @@ class Permissions:
     @classmethod
     def is_admin(cls, user):
         return user in cls._admins
-
-    ##################### Other #####################
-
-    @classmethod
-    def secure_module(cls, module, fn):
-        def wrapper(update, *args, **kwargs):
-            if whois(update) in cls._modules[module]:
-                fn(update, *args, **kwargs), 'module already loaded'
-        return wrapper
-
-    @classmethod
-    def load(cls):
-        data = cls._read_json(cls.f)
-        cls._verify(data, True)
-        cls._load_data(data)
 
     ##################### Config #####################
 

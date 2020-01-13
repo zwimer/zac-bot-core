@@ -1,11 +1,11 @@
-from utils import whois, reply, djoin
+from utils import logged, reply, djoin
 from permissions import Permissions
 from loader import Loader
 import logging
 
 
+@logged('module')
 def invoke(update, context, _):
-    logging.info('@' + whois(update) + ' invoked /module ' + ' '.join(context.args))
     usage = 'Usage: /module <command> <args>'
     try:
         fn = cmds[context.args[0]]

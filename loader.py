@@ -12,13 +12,16 @@ from telegram.ext import (
 from permissions import Permissions
 from utils import reply, rlock_methods
 
+
 @rlock_methods
 class Loader:
+    # Config
+    _fallback_g = 9999
+    _g = 1000
+    # Loader internals
     _py_mods = {}
     _installed = {}
     _pre_protection_fns = {}
-    _fallback_g = 9999
-    _g = 1000
 
     #################### Public ####################
 
@@ -97,6 +100,8 @@ class Loader:
             try:
                 extra_args = cls._pass[module] if module in cls._pass else None
                 install_me(update, context, extra_args)
+            except DispatcherHandlerContinue:
+                return
             except DispatcherHandlerStop:
                 raise
             except Exception as err:
@@ -121,3 +126,7 @@ class Loader:
     def _install_error_handler(cls, handler):
         cls._dp.add_error_handler(handler)
         cls._error_hander = handler
+
+# Raise to prevent dispatch handler stopping
+class DispatcherHandlerContinue(Exception):
+    pass
