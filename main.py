@@ -83,7 +83,6 @@ def main(_):
     Permissions.setup(permisions_f)
     invoke_extra_args = {
         'pubkey' : module_path,
-        'kill' : updater.stop,
         'log' : log_file
     }
     Loader.setup(dp, module_ordered_path, invoke_extra_args, unknown, error)
