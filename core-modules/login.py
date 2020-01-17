@@ -14,7 +14,7 @@ def invoke(update, context, _):
         new_u = context.args[0]
         try:
             Permissions.add_user_translation(user, new_u)
-            msg = 'Logged in as @' + new_u
+            msg = '@' + user + ' logged in as @' + new_u
             logging.info(msg)
             reply(update, msg)
         except AssertionError as err:
