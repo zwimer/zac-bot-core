@@ -1,6 +1,5 @@
 from permissions import Permissions
 from utils import logged, reply, djoin, cid
-import logging
 
 
 @logged('auth')
@@ -34,7 +33,7 @@ def passthrough(fn_usage, notify_success = True):
             except TypeError:
                 if fn_usage:
                     chain.append(fn_usage)
-                reply(update, 'usage: /' + mod_name + djoin(chain, ' '))
+                reply(update, 'Usage: /' + mod_name + djoin(chain, ' '))
         return wrapper
     return real_decorator
 

@@ -24,6 +24,9 @@ module_ordered_path = [
     module_path
 ]
 
+ro_path = module_path + '/ro/'
+rw_path = module_path + '/rw/'
+
 ### Logging ###
 
 log_file = './zac-bot.log'
@@ -82,7 +85,9 @@ def main(_):
     # Create handler registration
     Permissions.setup(permisions_f)
     invoke_extra_args = {
-        'pubkey' : module_path,
+        'mmj_lic' : ro_path,
+        'pubkey' : ro_path,
+        'shopping' : rw_path + '/shopping/',
         'log' : log_file
     }
     Loader.setup(dp, module_ordered_path, invoke_extra_args, unknown, error)

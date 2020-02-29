@@ -17,11 +17,11 @@ def cid(update):
 
 
 # Log invocations
-def logged(mod):
+def logged(mod, show_args = True):
     def real_decorator(f):
         def wrapper(update, context, extra):
-            msg = '@' + raw_whois(update) + ' invoked: /'
-            msg += mod + djoin(context.args, ' ')
+            msg = '@' + raw_whois(update) + ' invoked: /' + mod
+            msg += mod + djoin(context.args, ' ') if show_args else ' ****'
             msg = msg.strip()
             logging.info(msg)
             f(update, context, extra)
