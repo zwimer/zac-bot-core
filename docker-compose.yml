@@ -6,5 +6,6 @@ services:
         container_name: zac-bot
         hostname: zac-bot
         command: ash -c 'cd /zac-bot/ && python3 ./main.py'
+        restart: unless-stopped
         volumes:
             - ./:/zac-bot/
